@@ -8,7 +8,12 @@ from secrets import email, password, recipient
 MY_LAT = 22.171841
 MY_LONG = 76.065422
 
-def check_ISS():
+
+def is_over_head():
+    """
+    Gives a call to ISS API to get its current location.
+    :return: True if ISS is over my location (+5/-5 deg) (bool)
+    """
     # call ISS API
     response = requests.get(url="http://api.open-notify.org/iss-now.json")
     response.raise_for_status()
@@ -19,9 +24,17 @@ def check_ISS():
     iss_longitude = float(data["iss_position"]["longitude"])
 
     # Your position is within +5 or -5 degrees of the ISS position.
-    my_lat_rel = (MY_LAT + 5, MY_LAT - 5)
-    my_long_rel = (MY_LONG + 5, MY_LONG - 5)
+    if MY_LAT - 5 <= iss_latitude <= MY_LAT + 5 \
+            and MY_LONG - 5 <= iss_latitude <= MY_LONG + 5:
+        return True
+    return False
 
+def is_night():
+    """
+    Checks the time of sunrise-sunset using API.
+    Compares the time to see if its night at your location.
+    :return: True if it is night
+    """
     # Set params to get sunrise and sunset timings
     parameters = {
         "lat": MY_LAT,
@@ -38,13 +51,18 @@ def check_ISS():
     sunrise = int(data["results"]["sunrise"].split("T")[1].split(":")[0])
     sunset = int(data["results"]["sunset"].split("T")[1].split(":")[0])
 
+    # current time
     time_now = datetime.now()
 
-    # If the ISS is close to my current position
-    # and it is currently dark
-    if my_lat_rel[0] <= iss_latitude <= my_lat_rel[1] \
-            and my_long_rel[0] <= iss_longitude <= my_long_rel[1] \
-            and sunrise >= time_now.hour >= sunset:
+    # If it is currently dark
+    if sunrise >= time_now.hour >= sunset:
+        return True
+    return False
+
+
+# BONUS: run the code every 60 seconds.
+while True:
+    if is_over_head() and is_night():
         # Then send me an email to tell me to look up.
         with smtplib.SMTP("smtp.gmail.com") as connection:
             connection.starttls()
@@ -56,16 +74,12 @@ def check_ISS():
                     f"Hi,\nThe International Space Station is passing above you. "
                     f"Look up and catch a glimpse of it.\nHave Fun!\nThanks."
             )
-
-    print(iss_longitude, iss_latitude)
-    print(my_lat_rel, my_long_rel)
-    print(time_now.hour)
-    print(sunrise, sunset)
-
-
-# BONUS: run the code every 60 seconds.
-while True:
-    check_ISS()
+    elif not is_night() and not is_over_head():
+        print("ISS will not be in your location and will not be visible due to excessive sunlight")
+    elif not is_night():
+        print("ISS will not be visible due to excessive sunlight")
+    elif not is_over_head():
+        print("ISS is not near your location")
     time.sleep(60)
 
 
